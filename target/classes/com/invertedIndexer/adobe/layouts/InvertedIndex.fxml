@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import java.lang.*?>
+<?import javafx.scene.layout.*?>
+
+<AnchorPane prefHeight="465.0" prefWidth="757.0" xmlns="http://javafx.com/javafx/8" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.invertedIndexer.adobe.InvertedIndexerController">
+   <children>
+      <TextField fx:id="folderPath" layoutX="44.0" layoutY="34.0" prefHeight="25.0" prefWidth="450.0" promptText="Select folder in which you want to search" />
+      <Button fx:id="browseFolderBt" layoutX="529.0" layoutY="34.0" mnemonicParsing="false" text="Browse folder" />
+      <TextField fx:id="stopWordsPath" layoutX="44.0" layoutY="79.0" prefHeight="25.0" prefWidth="450.0" promptText="Select StopWords file" />
+      <Button fx:id="browseStopWordsBt" layoutX="529.0" layoutY="79.0" mnemonicParsing="false" prefHeight="25.0" prefWidth="89.0" text="Browse file" />
+      <Button fx:id="indexBt" layoutX="45.0" layoutY="131.0" mnemonicParsing="false" prefHeight="25.0" prefWidth="129.0" text="Index files" />
+      <TextField fx:id="searchedWords" layoutX="44.0" layoutY="416.0" prefHeight="25.0" prefWidth="320.0" promptText="Insert words you want to search" />
+      <Button fx:id="searchBt" layoutX="400.0" layoutY="416.0" mnemonicParsing="false" text="Search" />
+      <TableView fx:id="resultsTable" layoutX="45.0" layoutY="189.0" prefHeight="200.0" prefWidth="670.0" />
+      <ComboBox fx:id="languageCb" layoutX="344.0" layoutY="131.0" prefWidth="150.0" promptText="Select language" />
+      <Label layoutX="246.0" layoutY="135.0" text="Select language" />
+   </children>
+</AnchorPane>

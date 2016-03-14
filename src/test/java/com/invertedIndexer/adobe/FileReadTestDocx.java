@@ -34,11 +34,17 @@ public class FileReadTestDocx extends TestCase
 	{
 		try (FileInputStream fis = new FileInputStream(file.getAbsolutePath()))
 		{
-			XWPFDocument document = new XWPFDocument(fis);
-			List<XWPFParagraph> paragraphs = document.getParagraphs();
-			for (XWPFParagraph para : paragraphs) 
+			try(XWPFDocument document = new XWPFDocument(fis))
 			{
-				System.out.println(para.getText());
+				List<XWPFParagraph> paragraphs = document.getParagraphs();
+				for (XWPFParagraph para : paragraphs) 
+				{
+					System.out.println(para.getText());
+				}
+			}
+			catch (Exception e)
+			{
+				e.printStackTrace();
 			}
 		}
 		catch (FileNotFoundException e)

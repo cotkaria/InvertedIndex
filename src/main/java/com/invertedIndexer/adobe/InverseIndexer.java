@@ -8,7 +8,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -28,70 +27,90 @@ import org.apache.pdfbox.util.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 
+import com.invertedIndexer.adobe.types.MapFileToOccurences;
+import com.invertedIndexer.adobe.types.MapFileToWordOccurences;
+import com.invertedIndexer.adobe.types.MapWordToFileOccurrences;
+import com.invertedIndexer.adobe.types.MapWordToOccurences;
+import com.invertedIndexer.adobe.types.MapFileToWordOccurencesEntry;
+
+/**
+ * @author Cotkaria
+ * Class that contains application logic: 
+ * -Files indexing (get the number of occurrences for each word, ignoring stop words)
+ * -Word stemming (apply porter stemming algorithm for different languages)
+ * -Word search (support for multiple words as well)
+ */
 public class InverseIndexer
 {
 	// 1. Go through each word (what is a word? a group of alphabetic characters
 	// separated by specified separators: whitespace, digits and punctuation
-	// marks)
-	// auto-enable
+	// marks, i.e. auto-enable)
 	// 2. Make the word lower-case
 	// 3. Filter the stop words
 	// 4. Apply the stemming algorithm
 	// 5. Add them to the document map
 
-	// Map<String, Map<String, int>> index;
-	// index["retriev"]["document1"]++;
-
+	
 	private final static String EXTENSION_TXT = "txt";
 	private final static String EXTENSION_PDF = "pdf";
 	private final static String EXTENSION_DOC = "doc";
 	private final static String EXTENSION_DOCX = "docx";
 
-	private static final Pattern WORDS = Pattern.compile("[A-Za-z']+");
+	private static final Pattern WORDS_PATTERN = Pattern.compile("[A-Za-z']+");
 	private static final Pattern STOP_WORDS = Pattern.compile("(?:^\\s*)(\\w+).*");
 
 	private List<String> mStopWords;
-	private List<String> mSearchedFiles;
+	private List<String> mIndexedFiles;
 	
-	private Map<String, Map<String, Integer>> mInverseIndex;
+	private MapWordToFileOccurrences mInverseIndex;
 	private Stemmer mStemmer;
 
 	private SimpleStringProperty mCurrentlyIndexedFile;
+	private boolean mIsCancelled;
 	
 	public InverseIndexer(ALGORITHM language)
 	{
-		mInverseIndex = new HashMap<String, Map<String, Integer>>();
 		mStemmer = new SnowballStemmer(language);
-		mStopWords = new ArrayList<String>();
-		mSearchedFiles = new ArrayList<String>();
 		mCurrentlyIndexedFile = new SimpleStringProperty();
+		resetIndexData();
+	}
+	
+	private void resetIndexData()
+	{
+		mInverseIndex = new MapWordToFileOccurrences();
+		mStopWords = new ArrayList<String>();
+		mIndexedFiles = new ArrayList<String>();
+		mIsCancelled = false;
 	}
 
-	public List<Map.Entry<String, Map<String, Integer>>> findWithCount(String text)
+	public List<MapFileToWordOccurencesEntry> findWithCount(String text)
 	{
-		Map<String, Map<String, Integer>> totalResults = findText(text);
-		List<Map.Entry<String, Map<String, Integer>>> resultSet = getSortedResultsWithCount(totalResults);
+		MapFileToWordOccurences totalResults = findText(text);
+		List<MapFileToWordOccurencesEntry> resultSet = getSortedResultsWithCount(totalResults);
 		return resultSet;
 	}
 	
 	public List<String> find(String text)
 	{
-		List<Map.Entry<String, Map<String, Integer>>> resultSet = findWithCount(text);
+		List<MapFileToWordOccurencesEntry> resultSet = findWithCount(text);
 		
 		List<String> results = new ArrayList<String>();
-		for(Map.Entry<String, Map<String, Integer>> entry: resultSet)
+		for(MapFileToWordOccurencesEntry entry: resultSet)
 		{
 			results.add(entry.getKey());
-		}
-		
+		}		
 		return results;
 	}
 	
-	private Map<String, Map<String, Integer>> findText(String text)
+	/**
+	 * @param text: the word(s) to be searched, separated by white spaces
+	 * @return a map containing the files in which the words are found, along with the number of occurrences in each file
+	 */
+	private MapFileToWordOccurences findText(String text)
 	{
-		Map<String, Map<String, Integer>> fileOccurences = new HashMap<String, Map<String, Integer>>();
+		MapFileToWordOccurences fileOccurences = new MapFileToWordOccurences();
 		
-		Matcher matcher = WORDS.matcher(text);
+		Matcher matcher = WORDS_PATTERN.matcher(text);
 		while (matcher.find())
 		{
 			int start = matcher.start();
@@ -101,23 +120,24 @@ public class InverseIndexer
 				String word = text.substring(start, end).toLowerCase();
 				if(!mStopWords.contains(word))
 				{
-					Map<String, Integer> wordMap = findWordInternal(word);
+					MapFileToOccurences wordMap = findWordOccurences(word);
 					if(wordMap != null)
 					{
-						for (String fileName : mSearchedFiles)
+						for (String fileName : mIndexedFiles)
 						{
 							if(!fileOccurences.containsKey(fileName))
 							{
-								Map<String, Integer> occurences = new HashMap<String, Integer>();
+								MapWordToOccurences occurences = new MapWordToOccurences();
 								fileOccurences.put(fileName, occurences);
 							}
 							
-							Map<String, Integer> occurences = fileOccurences.get(fileName); 
 							int wordOccurences = 0;
 							if(wordMap.containsKey(fileName))
 							{
 								wordOccurences = wordMap.get(fileName);
 							}
+
+							MapWordToOccurences occurences = fileOccurences.get(fileName); 
 							occurences.put(word, wordOccurences);
 						}
 					}
@@ -127,40 +147,47 @@ public class InverseIndexer
 		return fileOccurences;
 	}
 	
-	private Map<String, Integer> findWordInternal(String word)
+	private MapFileToOccurences findWordOccurences(String word)
 	{
 		String stemmedWord = mStemmer.stem(word).toString().toLowerCase();
-		Map<String, Integer> wordMap = mInverseIndex.get(stemmedWord);
+		MapFileToOccurences wordMap = mInverseIndex.get(stemmedWord);
 		return wordMap;
 	}
 	
-	private List<Map.Entry<String, Map<String, Integer>>> getSortedResultsWithCount(Map<String, Map<String, Integer>> totalResults)
+	private List<MapFileToWordOccurencesEntry> getSortedResultsWithCount(MapFileToWordOccurences totalResults)
 	{
-		List<Map.Entry<String, Map<String, Integer>>> entries = new ArrayList<Map.Entry<String, Map<String, Integer>>>();
-		entries.addAll(totalResults.entrySet());
-		Collections.sort(entries,
-				(Map.Entry<String, Map<String, Integer>> e1, Map.Entry<String, Map<String, Integer>> e2) -> 
+		List<MapFileToWordOccurencesEntry> entries = new ArrayList<MapFileToWordOccurencesEntry>();
+		totalResults.entrySet().forEach(entry ->
 		{
-			Map<String, Integer> map1 = e1.getValue();
-			Map<String, Integer> map2 = e2.getValue();
-			int total1 = map1.entrySet().stream().mapToInt(Map.Entry<String, Integer>::getValue).sum();
-			int total2 = map2.entrySet().stream().mapToInt(Map.Entry<String, Integer>::getValue).sum();
-			return total2 - total1;
+			entries.add(new MapFileToWordOccurencesEntry(entry.getKey(), entry.getValue()));
 		});
 		entries.removeIf(entry ->
 		{
 			int total = entry.getValue().entrySet().stream().mapToInt(Map.Entry<String, Integer>::getValue).sum();
 			return (total == 0);
 		});
+		Collections.sort(entries,
+				(MapFileToWordOccurencesEntry e1, MapFileToWordOccurencesEntry e2) -> 
+		{
+			MapWordToOccurences map1 = e1.getValue();
+			MapWordToOccurences map2 = e2.getValue();
+			int total1 = map1.entrySet().stream().mapToInt(Map.Entry<String, Integer>::getValue).sum();
+			int total2 = map2.entrySet().stream().mapToInt(Map.Entry<String, Integer>::getValue).sum();
+			return total2 - total1;
+		});
 		
 		return entries;
 	}
 
+	
+	/**
+	 * @param docsDirectory
+	 * @param stopWordsFile
+	 * @throws Exception
+	 */
 	public void index(File docsDirectory, File stopWordsFile) throws Exception
 	{
-		mStopWords.clear();
-		mSearchedFiles.clear();
-		mInverseIndex.clear();
+		resetIndexData();
 		
 		readStopWords(stopWordsFile);
 		if (docsDirectory != null)
@@ -169,10 +196,13 @@ public class InverseIndexer
 			{
 				for (File file : docsDirectory.listFiles())
 				{
-					String fileName = file.getName();
-					mCurrentlyIndexedFile.set(fileName);
+					if(mIsCancelled)
+					{
+						break;
+					}
 					
-					boolean isValidFile = true;
+					String fileName = file.getName();
+					mCurrentlyIndexedFile.set(fileName);//set observableValue 
 					
 					String extension = FilenameUtils.getExtension(file.getName());
 					switch (extension)
@@ -188,15 +218,9 @@ public class InverseIndexer
 						indexFileDocx(file);
 						break;
 					default:
-						isValidFile = false;
 						System.err.println("InverseIndexer::index() ignoring unsupported file type: "
 										+ file);
 						break;
-					}
-					
-					if(isValidFile)
-					{
-						mSearchedFiles.add(fileName);
 					}
 				}
 			}
@@ -212,6 +236,10 @@ public class InverseIndexer
 		}
 	}
 
+	/**
+	 * @param file
+	 * Method that parses and performs indexing for simple txt files
+	 */
 	private void indexFileTxt(File file)
 	{
 		String fileName = FilenameUtils.getName(file.getPath());
@@ -229,6 +257,11 @@ public class InverseIndexer
 		}
 	}
 
+	
+	/**
+	 * @param file
+	 * Method that parses and performs indexing for PDF files
+	 */
 	private void indexFilePdf(File file)
 	{
 		PDFParser parser = null;
@@ -285,6 +318,10 @@ public class InverseIndexer
 		}
 	}
 
+	/**
+	 * @param file
+	 * Method that parses and performs indexing for Word docs
+	 */
 	private void indexFileDocx(File file)
 	{
 		try (FileInputStream fis = new FileInputStream(file.getAbsolutePath());
@@ -308,22 +345,32 @@ public class InverseIndexer
 		}
 	}
 
+	/**
+	 * @param text
+	 * @param docKey
+	 * This is core method for text indexing, called from the methods specialized for different file types
+	 */
 	public void indexText(String text, String docKey)
 	{
-		Matcher matcher = WORDS.matcher(text);
-		while (matcher.find())
+		Matcher matcher = WORDS_PATTERN.matcher(text);
+		while (matcher.find())	//here we go through each word in the text
 		{
 			int start = matcher.start();
 			int end = matcher.end();
-			if (end - start > 1)
+			if (end - start > 1)	//ignore one-letter word as they are definitely stop words
 			{
 				String word = text.substring(start, end).toLowerCase();
-				if(mStopWords.contains(word) == false)
+				if(mStopWords.contains(word) == false)	//ignore stop words
 				{
-					word = mStemmer.stem(word).toString();
-					addWordToIndexer(word, docKey);
+					word = mStemmer.stem(word).toString();	//apply stemming algorithm
+					addWordToIndexer(word, docKey);	//add word to Index Map
 				}
 			}
+		}
+		//keep the names of the indexed files in the list
+		if(!mIndexedFiles.contains(docKey))
+		{
+			mIndexedFiles.add(docKey);
 		}
 	}
 
@@ -331,9 +378,9 @@ public class InverseIndexer
 	{
 		if (mInverseIndex.containsKey(word) == false)
 		{
-			mInverseIndex.put(word, new HashMap<String, Integer>());
-		}
-		Map<String, Integer> textMap = mInverseIndex.get(word);
+			mInverseIndex.put(word, new MapFileToOccurences());
+		}	
+		MapFileToOccurences textMap = mInverseIndex.get(word);
 		if (textMap.containsKey(docKey) == false)
 		{
 			textMap.put(docKey, 0);
@@ -380,5 +427,10 @@ public class InverseIndexer
 			}
 		}
 		return stopWords;
+	}
+	
+	public void cancelIndex()
+	{
+		mIsCancelled = true;
 	}
 }

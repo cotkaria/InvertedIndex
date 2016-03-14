@@ -2,7 +2,8 @@ package com.invertedIndexer.adobe;
 import java.awt.Desktop;
 import java.io.*;
 import java.util.List;
-import java.util.Map;
+
+import com.invertedIndexer.adobe.types.MapFileToWordOccurencesEntry;
 
 import opennlp.tools.stemmer.snowball.SnowballStemmer.ALGORITHM;
 import javafx.application.*;
@@ -15,9 +16,14 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.ProgressIndicator;
 import javafx.stage.Stage;
-import javafx.stage.StageStyle;
+
+/**
+ * @author Cotkaria
+ *
+ */
 
 public class MainWindow extends Application
 {
@@ -34,8 +40,8 @@ public class MainWindow extends Application
 	private InverseIndexer mEnglishIndexer = new InverseIndexer(ALGORITHM.ENGLISH);
 	private InverseIndexer mRomanianIndexer = new InverseIndexer(ALGORITHM.ROMANIAN);
 	
+	Task<Void> mIndexTask = null;
 	private Alert mAlert = null;
-	private boolean mIsIndexingFinished = false;
 	
 	public static void main(String[] args)
 	{
@@ -95,17 +101,27 @@ public class MainWindow extends Application
 		}
 		return null;
 	}
-	
+		
+	/**
+	 * @param stopWordsFile (file containing words to ignore while indexing)
+	 * @param docsFolder (folder containing all files to be indexed)
+	 * @param language (selected language for indexing)
+	 * Method performs file indexing with given parameters
+	 */
 	public void index(String stopWordsFile, String docsFolder, IndexerLanguage language)
 	{
 		InverseIndexer indexer = getIndexer(language);
-		showIndexingPopup(indexer);
 		
-		Task<Void> indexTask = new Task<Void>()
+		mIndexTask = new Task<Void>()
 		{
 			@Override
 			protected Void call() throws Exception
 			{
+				Platform.runLater(() ->
+				{
+					showIndexingPopup(indexer);
+				});
+				
 				System.out.println("Indexing started!");
 				try
 				{
@@ -117,7 +133,6 @@ public class MainWindow extends Application
 					{
 						DialogHelper.showErrorPopup(e.getMessage());
 					});
-					
 				}
 				System.out.println("Indexing finished!");
 				Platform.runLater(() ->
@@ -127,13 +142,20 @@ public class MainWindow extends Application
 				return null;
 			}
 		};
-		new Thread(indexTask).start();
+		
+		new Thread(mIndexTask).start();
 	}
-	
-	public List<Map.Entry<String, Map<String, Integer>>> search(String searchedWords, IndexerLanguage language)
+		
+	/**
+	 * @param searchedWords (one or more words, separated by white space, to be searched for)
+	 * @param language (selected language for indexing files)
+	 * @return number of occurrences for every word in all indexed files
+	 */
+	public List<MapFileToWordOccurencesEntry> search(String searchedWords, IndexerLanguage language)
 	{
 		return getIndexer(language).findWithCount(searchedWords);
 	}
+	
 	
 	private InverseIndexer getIndexer(IndexerLanguage language)
 	{
@@ -150,14 +172,16 @@ public class MainWindow extends Application
 		}
 		return indexer;
 	}
-	
+		
+	/**
+	 * @param indexer
+	 * Method that displays Pop-Up during files indexing
+	 */
 	private void showIndexingPopup(InverseIndexer indexer)
 	{
-		mIsIndexingFinished = false;
-		mAlert = new Alert(AlertType.INFORMATION);
-		mAlert.setTitle("Loading");
-		mAlert.initStyle(StageStyle.TRANSPARENT);
-		mAlert.setHeaderText("Please be patient while indexing");
+		mAlert = new Alert(AlertType.NONE, "", ButtonType.CANCEL);
+		mAlert.setTitle("Processing");
+		mAlert.setHeaderText("Please be patient while indexing!");
 		indexer.getCurrentlyIndexedFile().addListener(new ChangeListener<String>()
 		{
 			@Override
@@ -173,23 +197,28 @@ public class MainWindow extends Application
 		mAlert.setGraphic(new ProgressIndicator(-1));
 		mAlert.setOnCloseRequest(event ->
 		{
-			if(mIsIndexingFinished == false)
-			{
-				event.consume();
-			}
+			indexer.cancelIndex();
 		});
-		mAlert.show();
+		mAlert.showAndWait()
+			.filter(response -> response == ButtonType.CANCEL)
+			.ifPresent(response -> 
+			{
+				indexer.cancelIndex();
+			});
 	}
 	
 	private void closeIndexingPopup()
 	{
 		if(mAlert != null)
 		{
-			mIsIndexingFinished = true;
 			mAlert.close();
 		}
 	}
-	
+		
+	/**
+	 * @param filePath
+	 * method that opens the given file
+	 */
 	public void openFile(String filePath)
 	{
 		File file = new File(filePath);

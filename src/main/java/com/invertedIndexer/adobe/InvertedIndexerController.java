@@ -9,10 +9,13 @@ import java.util.ResourceBundle;
 import java.util.stream.Stream;
 import java.util.stream.Collectors;
 
+import com.invertedIndexer.adobe.types.MapWordToOccurences;
+import com.invertedIndexer.adobe.types.MapFileToWordOccurencesEntry;
+
+import javafx.beans.property.SimpleIntegerProperty;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.value.ObservableValue;
 import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 import javafx.fxml.FXML;
 import javafx.fxml.Initializable;
 import javafx.scene.control.Button;
@@ -51,7 +54,7 @@ public class InvertedIndexerController implements Initializable{
     private ComboBox<String> languageCb;
     
     @FXML
-    private TableView<Map.Entry<String, Map<String, Integer>>> resultsTable;
+    private TableView<MapFileToWordOccurencesEntry> resultsTable;
     
     private MainWindow mMainWindow;
     
@@ -80,7 +83,7 @@ public class InvertedIndexerController implements Initializable{
 		{
 			if(event.getClickCount() > 1)
 			{
-				Map.Entry<String, Map<String, Integer>> selection = resultsTable.getSelectionModel().getSelectedItem();
+				MapFileToWordOccurencesEntry selection = resultsTable.getSelectionModel().getSelectedItem();
 				if(selection != null)
 				{
 					String folder = folderPath.getText();
@@ -109,56 +112,60 @@ public class InvertedIndexerController implements Initializable{
     {
     	if(mMainWindow != null && !searchedWords.getText().isEmpty())
     	{
-    		List<Map.Entry<String, Map<String, Integer>>> results = mMainWindow.search(searchedWords.getText(), 
-    				getSelectedLanguage());
+    		List<MapFileToWordOccurencesEntry> results = mMainWindow.search(searchedWords.getText(), getSelectedLanguage());
     		if(!results.isEmpty())
     		{
-        		List<TableColumn<Map.Entry<String, Map<String, Integer>>, String>> tableColumns = new ArrayList<>();
-    			
-    			TableColumn<Map.Entry<String, Map<String, Integer>>, String> fileNameCol = new TableColumn<>("Document name");
-        		fileNameCol.setCellValueFactory(new Callback<CellDataFeatures<Map.Entry<String, Map<String, Integer>>, String>, 
-        				ObservableValue<String>>() 
-        		{
-        			public ObservableValue<String> call(CellDataFeatures<Map.Entry<String, Map<String, Integer>>, String> p) 
-        			{
-        		         return new SimpleStringProperty(p.getValue().getKey());
-        		    }
-        		});
-        		tableColumns.add(fileNameCol);
-        		
-        		Map<String, Integer> wordOccurences = results.get(0).getValue();
-        		for(Map.Entry<String, Integer> entry: wordOccurences.entrySet())
-        		{
-        			String word = entry.getKey();
-        			TableColumn<Map.Entry<String, Map<String, Integer>>, String> wordColumn = 
-        					new TableColumn<Map.Entry<String, Map<String, Integer>>, String>(word);
-        			wordColumn.setCellValueFactory(new Callback<CellDataFeatures<Map.Entry<String, Map<String, Integer>>, String>, 
-            				ObservableValue<String>>()
-            		{
-            			public ObservableValue<String> call(CellDataFeatures<Map.Entry<String, Map<String, Integer>>, String> p) 
-            			{
-            				int value = 0;
-            				Map.Entry<String, Map<String, Integer>> result = p.getValue();
-            				Map<String, Integer> wordHits = result.getValue();
-            				if(wordHits != null)
-            				{
-            					if(wordHits.containsKey(word))
-            					{
-                    				value = wordHits.get(word);
-            					}
-            				}
-            		        return new SimpleStringProperty(String.valueOf(value));
-            		    }
-            		});
-        			tableColumns.add(wordColumn);
-        		}
-        		
-        		resultsTable.getColumns().clear();
-        		resultsTable.getColumns().addAll(tableColumns);
-        		
-        		resultsTable.setItems(FXCollections.observableArrayList(results));
+    			addResultsToTable(results);
     		}
 		}
+    }
+    
+    private void addResultsToTable(List<MapFileToWordOccurencesEntry> results)
+    {
+		List<TableColumn<MapFileToWordOccurencesEntry, ?>> tableColumns = new ArrayList<>();
+		
+		TableColumn<MapFileToWordOccurencesEntry, String> fileNameCol = new TableColumn<>("Document name");
+		fileNameCol.setCellValueFactory(new Callback<CellDataFeatures<MapFileToWordOccurencesEntry, String>, 
+				ObservableValue<String>>() 
+		{
+			public ObservableValue<String> call(CellDataFeatures<MapFileToWordOccurencesEntry, String> p) 
+			{
+		         return new SimpleStringProperty(p.getValue().getKey());
+		    }
+		});
+		tableColumns.add(fileNameCol);
+		
+		MapWordToOccurences wordOccurences = results.get(0).getValue();
+		for(Map.Entry<String, Integer> entry: wordOccurences.entrySet())
+		{
+			String word = entry.getKey();
+			TableColumn<MapFileToWordOccurencesEntry, Number> wordColumn = 
+					new TableColumn<>(word);
+			wordColumn.setCellValueFactory(new Callback<CellDataFeatures<MapFileToWordOccurencesEntry, Number>, 
+    				ObservableValue<Number>>()
+    		{
+    			public ObservableValue<Number> call(CellDataFeatures<MapFileToWordOccurencesEntry, Number> p) 
+    			{
+    				int value = 0;
+    				MapFileToWordOccurencesEntry result = p.getValue();
+    				MapWordToOccurences wordHits = result.getValue();
+    				if(wordHits != null)
+    				{
+    					if(wordHits.containsKey(word))
+    					{
+            				value = wordHits.get(word);
+    					}
+    				}
+    		        return new SimpleIntegerProperty(value);
+    		    }
+    		});
+			tableColumns.add(wordColumn);
+		}
+		
+		resultsTable.getColumns().clear();
+		resultsTable.getColumns().addAll(tableColumns);
+		
+		resultsTable.setItems(FXCollections.observableArrayList(results));
     }
     
     private void onFolderBrowse() 

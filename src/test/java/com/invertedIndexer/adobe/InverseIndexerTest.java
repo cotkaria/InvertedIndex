@@ -3,6 +3,9 @@ package com.invertedIndexer.adobe;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.invertedIndexer.adobe.types.MapFileToWordOccurencesEntry;
+import com.invertedIndexer.adobe.types.MapWordToOccurences;
+
 import opennlp.tools.stemmer.snowball.SnowballStemmer.ALGORITHM;
 import junit.framework.Test;
 import junit.framework.TestCase;
@@ -156,4 +159,41 @@ public class InverseIndexerTest extends TestCase
 			assertEquals(results.get(1), docB);
 		}
 	}
+	
+	public void testWithCountForMultipleSearchWords()
+	{
+		InverseIndexer indexer = new InverseIndexer(ALGORITHM.ENGLISH);
+		
+		String textA = "Myself was being auto-asphyxiated by thyself through blackmailing, blackmailed";
+		String docA = "DocA.txt";
+		indexer.indexText(textA, docA);
+		
+		String textB = "Eurepides, the blackmailer, dies from asphyxiation";
+		String docB = "DocB.txt";
+		indexer.indexText(textB, docB);
+		
+		String word1 = "blackmailers";
+		String word2 = "asphyxiations";
+		String composedWord = word1 + " " + word2;
+		List<MapFileToWordOccurencesEntry> results = indexer.findWithCount(composedWord);
+		assertEquals(2, results.size());
+		if(results.size() == 2)
+		{
+			String fileName0 = results.get(0).getKey();
+			String fileName1 = results.get(1).getKey();
+			
+			assertEquals(fileName0, docA);
+			assertEquals(fileName1, docB);
+			
+			MapWordToOccurences wordToOccurrences0 = results.get(0).getValue();
+			assertEquals(wordToOccurrences0.get(word1).intValue(), 2);
+			assertEquals(wordToOccurrences0.get(word2).intValue(), 1);
+			
+			MapWordToOccurences wordToOccurrences1 = results.get(1).getValue();
+			assertEquals(wordToOccurrences1.get(word1).intValue(), 1);
+			assertEquals(wordToOccurrences1.get(word2).intValue(), 1);
+		}
+	}
+	
+	
 }
